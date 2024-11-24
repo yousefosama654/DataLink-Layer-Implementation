@@ -21,8 +21,69 @@ void Node::initialize()
 {
     // TODO - Generated method body
 }
-
 void Node::handleMessage(cMessage *msg)
 {
     EV << "hello from " << this->getName() << "\n";
+}
+
+char Node::calculateParity(std::string &payload)
+{
+    char parityByte = 0;
+    int payloadSize = payload.size();
+    for (int i = 0; i < payloadSize; ++i)
+    {
+        parityByte = (parityByte ^ payload[i]);
+    }
+    return parityByte;
+}
+void Node::framing(Message_Base *mptr, std::string &payload)
+{
+    // TODO - Generated method body
+    std::string modified = "$";
+    int payloadSize = payload.size();
+
+    for (int i = 0; i < payloadSize; i++)
+    {
+        if (payload[i] == '$' || payload[i] == '/')
+        {
+            modified += "/";
+        }
+        modified += payload[i];
+    }
+    modified += "$";
+
+    char parity = calculateParity(modified);
+
+    mptr->setPayload(modified.c_str());
+    // mptr->setHeader(seq);
+    mptr->setTrailer(parity);
+    mptr->setType(0);
+}
+void Node::modifyMessage(std::string &payload)
+{
+    int bitIdx = rand() % 8;
+    int byteIdx = rand() % payload.length();
+    payload[byteIdx] ^= (1 << bitIdx);
+}
+void Node::openOutputFile()
+{
+
+    outputFile.open("output.txt", std::ios::out | std::ios::trunc);
+
+    // Return if file was not opened
+    if (!outputFile.is_open())
+    {
+        std::cerr << "[NODE] Error opening output file." << std::endl;
+        return;
+    }
+}
+
+void Node::fillOutputFile()
+{
+    openOutputFile();
+    for (auto it : outputBuffer)
+    {
+        outputFile << it << std::endl;
+    }
+    outputFile.close();
 }

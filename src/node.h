@@ -17,7 +17,9 @@
 #define __DATALINK_NODE_H_
 
 #include <omnetpp.h>
-
+#include "message_m.h"
+#include <fstream>
+#include <iostream>
 using namespace omnetpp;
 
 /**
@@ -30,7 +32,14 @@ protected:
   virtual void handleMessage(cMessage *msg) override;
   char calculateParity(std::string &payload);
   char calculateCRC(std::string &payload);
-  void framing();
-};
+  void framing(Message_Base *mptr, std::string &payload);
+  void modifyMessage(std::string &payload);
+  void openOutputFile();
+  void fillOutputFile();
 
+public:
+  // Output file for logs
+  std::fstream outputFile;
+  std::vector<std::string> outputBuffer;
+};
 #endif
