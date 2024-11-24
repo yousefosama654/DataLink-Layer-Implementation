@@ -1,8 +1,8 @@
 version 3
-run General-0-20241125-00:18:28-21268
+run General-0-20241125-00:49:09-21276
 attr configname General
-attr datetime 20241125-00:18:28
-attr datetimef 20241125-001828
+attr datetime 20241125-00:49:09
+attr datetimef 20241125-004909
 attr experiment General
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -10,20 +10,41 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network datalink.Network
-attr processid 21268
+attr processid 21276
 attr repetition 0
 attr replication #0
 attr resultdir results
 attr runnumber 0
 attr seedset 0
 config network datalink.Network
+config **.ProcessingDelay 0.5
+config **.DuplicationDelay 0.1
+config **.TransmissionDelay 1.0
+config **.ErrorDelay 4.0
+config **.WindowSize 4
+config **.TimeoutInterval 10
+config **.ACKLossProbability 0
 
 par Network.node0.out.channel typename "\"ned.IdealChannel\""
 par Network.node1.out.channel typename "\"ned.IdealChannel\""
 par Network.coordinator.out0.channel typename "\"ned.IdealChannel\""
 par Network.coordinator.out1.channel typename "\"ned.IdealChannel\""
 par Network.node0 typename "\"datalink.Node\""
+par Network.node0 ProcessingDelay 0.5
+par Network.node0 DuplicationDelay 0.1
+par Network.node0 TransmissionDelay 1
+par Network.node0 ErrorDelay 4
+par Network.node0 WindowSize 4
+par Network.node0 TimeoutInterval 10
+par Network.node0 ACKLossProbability 0
 par Network.node1 typename "\"datalink.Node\""
+par Network.node1 ProcessingDelay 0.5
+par Network.node1 DuplicationDelay 0.1
+par Network.node1 TransmissionDelay 1
+par Network.node1 ErrorDelay 4
+par Network.node1 WindowSize 4
+par Network.node1 TimeoutInterval 10
+par Network.node1 ACKLossProbability 0
 par Network.coordinator typename "\"datalink.Coordinator\""
 par Network typename "\"datalink.Network\""
 

@@ -36,6 +36,7 @@ protected:
   void modifyMessage(std::string &payload);
   void openOutputFile();
   void fillOutputFile();
+  void Timeout_print(int seqnum);
 
 public:
   // Output file for logs

@@ -23,7 +23,8 @@ void Node::initialize()
 }
 void Node::handleMessage(cMessage *msg)
 {
-    EV << "hello from " << this->getName() << "\n";
+    double paramValue = par("DuplicationDelay");
+    EV << "hello from " << this->getName() << " value is " << paramValue << "\n";
 }
 
 char Node::calculateParity(std::string &payload)
@@ -86,4 +87,11 @@ void Node::fillOutputFile()
         outputFile << it << std::endl;
     }
     outputFile.close();
+}
+void Node::Timeout_print(int seqnum)
+{
+
+    std::string line_to_print = "Time out event at time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] for frame with seq_num=[" + std::to_string(seqnum) + "]; \n";
+    std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
 }

@@ -20,6 +20,14 @@ package datalink;
 //
 simple Node
 {
+        parameters:
+        double ProcessingDelay;
+        double DuplicationDelay;
+        double TransmissionDelay;
+        double ErrorDelay;
+        double WindowSize;
+        double TimeoutInterval;
+        double ACKLossProbability;
         gates:
         input in;
         output out;
