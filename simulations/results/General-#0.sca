@@ -1,0 +1,29 @@
+version 3
+run General-0-20241124-23:44:31-17788
+attr configname General
+attr datetime 20241124-23:44:31
+attr datetimef 20241124-234431
+attr experiment General
+attr inifile omnetpp.ini
+attr iterationvars ""
+attr iterationvarsd ""
+attr iterationvarsf ""
+attr measurement ""
+attr network datalink.Network
+attr processid 17788
+attr repetition 0
+attr replication #0
+attr resultdir results
+attr runnumber 0
+attr seedset 0
+config network datalink.Network
+
+par Network.node0.out.channel typename "\"ned.IdealChannel\""
+par Network.node1.out.channel typename "\"ned.IdealChannel\""
+par Network.coordinator.out0.channel typename "\"ned.IdealChannel\""
+par Network.coordinator.out1.channel typename "\"ned.IdealChannel\""
+par Network.node0 typename "\"datalink.Node\""
+par Network.node1 typename "\"datalink.Node\""
+par Network.coordinator typename "\"datalink.Coordinator\""
+par Network typename "\"datalink.Network\""
+
