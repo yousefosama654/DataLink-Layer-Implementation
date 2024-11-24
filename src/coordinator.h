@@ -20,6 +20,7 @@
 
 using namespace omnetpp;
 
+
 /**
  * TODO - Generated class
  */
@@ -28,6 +29,7 @@ class Coordinator : public cSimpleModule
   protected:
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
+    void readCoordinatorFile(std::string &fileName, int &nodeID);
 };
 
 #endif
