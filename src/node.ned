@@ -21,13 +21,13 @@ package datalink;
 simple Node
 {
         parameters:
-        double ProcessingDelay;
-        double DuplicationDelay;
-        double TransmissionDelay;
-        double ErrorDelay;
-        double WindowSize;
-        double TimeoutInterval;
-        double ACKLossProbability;
+        double ProcessingDelay=default(0);
+        double DuplicationDelay=default(0);
+        double TransmissionDelay=default(0);
+        double ErrorDelay=default(0);
+        int WindowSize=default(0);
+        double TimeoutInterval=default(0);
+        double ACKLossProbability=default(0);
         gates:
         input in;
         output out;

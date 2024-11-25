@@ -1,0 +1,4 @@
+1000 hello nesma
+0100 hello sara
+0010 hello eman
+0001 hello yousef
