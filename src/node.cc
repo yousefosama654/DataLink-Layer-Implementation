@@ -5,11 +5,18 @@ Define_Module(Node);
 void Node::initialize()
 {
     // TODO - Generated method body
-    delayTime = 0;
     windowStart = 0;
     windowEnd = par("WindowSize").intValue();
     messageIndex = 0;
-    maxSeqNo = par("WindowSize").intValue() * 2;
+    maxSeqNo = par("MaximumSequenceNumber").intValue() + 1;
+    NACKs.resize(maxSeqNo, false);
+    recivedMessages.resize(maxSeqNo, false);
+    sentMessages.resize(maxSeqNo, false);
+    delayFlag = false;
+    lossFlag = false;
+    isSender = false;
+    delayID = -1;
+    lossID = -1;
 }
 void Node::handleMessage(cMessage *msg)
 {
@@ -19,26 +26,55 @@ void Node::handleMessage(cMessage *msg)
 
     Message_Base *mptr = check_and_cast<Message_Base *>(msg);
 
-    // print the recived message
-    if (mptr->getType() == 0)
+    // if the message is self message send the processed msg and start processing new msg
+    if (msg->isSelfMessage())
     {
-        EV << mptr->getHeader() << endl;
-        EV << mptr->getPayload() << endl;
-        EV << mptr->getTrailer() << endl;
+        // print here in the output file--> At time ..., Node[id]  [sent]  frame .....
+        if (mptr->getType() == 1 || mptr->getType() == 0)
+        {
+            sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            return;
+        }
+        if (lossFlag && lossID == mptr->getHeader())
+        {
+            lossFlag = false;
+        }
+        else if (delayFlag && delayID == mptr->getHeader())
+        {
+            delayFlag = false;
+            sendDelayed(msg, par("ErrorDelay").doubleValue() + par("TransmissionDelay").doubleValue(), "out");
+        }
+        else
+        {
+            sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+        }
+
+        sendMessage("out");
+        return;
     }
+    // print the recived message from the other node
     else
     {
-        if (mptr->getType() == 1)
-        {
-            EV << "ACK" << endl;
-        }
-        else if (mptr->getType() == 2)
-        {
-            EV << "NACK" << endl;
-        }
-        EV << mptr->getAck_no() << endl;
-    }
 
+        if (mptr->getType() == 2)
+        {
+            EV << mptr->getHeader() << endl;
+            EV << mptr->getPayload() << endl;
+            EV << mptr->getTrailer() << endl;
+        }
+        else
+        {
+            if (mptr->getType() == 1)
+            {
+                EV << "ACK" << endl;
+            }
+            else if (mptr->getType() == 0)
+            {
+                EV << "NACK" << endl;
+            }
+            EV << mptr->getAck_no() << endl;
+        }
+    }
     // if I recieve message from coordinator read the input file
     if (std::string(mptr->getPayload()).rfind("input", 0) == 0)
     {
@@ -49,64 +85,101 @@ void Node::handleMessage(cMessage *msg)
     else
     {
         // recieving ACK
+        // ACK may be request for new frame
+        // or ask for lost frame
         if (mptr->getType() == 1)
         {
             int Ack_no = mptr->getAck_no();
             // advance window
+
             for (int i = windowStart; i < messageIndex; i++)
             {
                 if (i % maxSeqNo == Ack_no)
                 {
-                    windowEnd += (i - windowStart);
-                    windowStart += (i - windowStart);
+                    if (sentMessages[Ack_no] == true && NACKs[Ack_no] == true)
+                    {
+                        Message_Base *new_msg = new Message_Base();
+                        framing(new_msg, messages[i]);
+                        new_msg->setHeader(i % maxSeqNo);
+                        scheduleAt(simTime() + 0.001, new_msg);
+                        EV << "resending frame " << i << endl;
+                    }
+                    else
+                    {
+                        {
+                            int oldWindowStart = windowStart;
+                            windowEnd += (i - windowStart);
+                            windowStart += (i - windowStart);
+                            for (int i = oldWindowStart; i < windowStart; i++)
+                            {
+                                sentMessages[i] = false;
+                                NACKs[i] = false;
+                            }
+                        }
+                    }
                 }
             }
         }
         // recieving  NACK
-        else if (mptr->getType() == 2)
+        else if (mptr->getType() == 0)
         {
             int Ack_no = mptr->getAck_no();
             for (int i = windowStart; i < messageIndex; i++)
             {
                 if (i % maxSeqNo == Ack_no)
                 {
+                    NACKs[Ack_no] = true;
                     Message_Base *new_msg = new Message_Base();
-                    new_msg->setPayload(messages[i].c_str());
-                    new_msg->setType(0);
+                    framing(new_msg, messages[i]);
                     new_msg->setHeader(i % maxSeqNo);
-                    new_msg->setTrailer(0);
-                    sendMessage(new_msg, std::bitset<4>(0), "out");
+                    scheduleAt(simTime() + 0.001, new_msg);
+                    EV << "resending frame " << i << endl;
                 }
             }
         }
         // recievind data
         else
         {
-            // assume data is true --> check for error using crc
-            // assume out of order data discarded --> add bool vector for messages to mark the recived data out of order
-            // add de-framing
+            // TODO add de-framing--------------------------------------
             int seqNo = mptr->getHeader();
-            // advance window
+            // if data is already recived discared it
+            if (recivedMessages[seqNo] == true)
+                return;
+            // check for error using crc
+            // if(calculateCRC(mptr->getPayload()) != mptr->getTrailer())
+            //     return;
             for (int i = windowStart; i < windowEnd; i++)
             {
                 if (i % maxSeqNo == seqNo)
                 {
+                    // if data is in order send ACK then advance recieve window
                     if (i == windowStart)
                     {
-                        Message_Base *new_msg = new Message_Base();
-                        new_msg->setType(1);
-                        new_msg->setAck_no((mptr->getHeader() + 1) % maxSeqNo);
-                        sendMessage(new_msg, std::bitset<4>(0), "out");
-                        windowEnd += 1;
-                        windowStart += 1;
+                        recivedMessages[seqNo] = true;
+                        int i = seqNo;
+                        while (recivedMessages[i] == true)
+                        {
+                            i++;
+                            windowEnd += 1;
+                            windowStart += 1;
+                            recivedMessages[(windowEnd - 1) % maxSeqNo] = false;
+                            NACKs[(windowEnd - 1) % maxSeqNo] = false;
+                        }
+                        int ack_no = (windowStart % maxSeqNo);
+                        sendACK(ack_no, 1, "out");
                         break;
                     }
+                    // if data is out of order send NACK
                     else
                     {
-                        Message_Base *new_msg = new Message_Base();
-                        new_msg->setType(2);
-                        new_msg->setAck_no((windowStart) % maxSeqNo);
-                        sendMessage(new_msg, std::bitset<4>(0), "out");
+                        int type = 1;
+                        if (NACKs[seqNo] == false)
+                        {
+                            type = (0);
+                            NACKs[seqNo] = true;
+                        }
+                        int ack_no = ((windowStart) % maxSeqNo);
+                        sendACK(ack_no, type, "out");
                         break;
                     }
                 }
@@ -116,19 +189,7 @@ void Node::handleMessage(cMessage *msg)
 
     if (isSender)
     {
-        while (messageIndex < windowEnd && messageIndex < messages.size())
-        {
-            delayTime += par("ProcessingDelay").doubleValue();
-            Message_Base *new_msg = new Message_Base();
-            // new_msg->setPayload(messages[messageIndex].c_str());
-            // add framing
-            // new_msg->setType(0);
-            new_msg->setHeader(messageIndex % maxSeqNo);
-            // new_msg->setTrailer(0);
-            framing(new_msg, messages[messageIndex]);
-            sendMessage(new_msg, errors[messageIndex], "out");
-            messageIndex++;
-        }
+        sendMessage("out");
     }
 }
 
@@ -165,7 +226,7 @@ void Node::framing(Message_Base *mptr, std::string &payload)
     // mptr->setHeader(seq);
     // mptr->setTrailer(parity);
     mptr->setTrailer(calculateCRC(modified));
-    mptr->setType(0);
+    mptr->setType(2);
 }
 void Node::modifyMessage(Message_Base *msg)
 {
@@ -237,33 +298,49 @@ void Node::readInputFile(std::string &fileName, std::vector<std::bitset<4>> *err
     }
 }
 
-void Node::sendMessage(Message_Base *msg, std::bitset<4> error, const char *gateName)
+void Node::sendMessage(const char *gateName)
 {
-
-    if ((error & std::bitset<4>(errorType::Loss)) != std::bitset<4>(0))
+    if (messageIndex >= windowEnd || messageIndex >= messages.size())
     {
         return;
     }
-    delayTime += par("TransmissionDelay").doubleValue();
+    // print here in the output file
+    //     At time [.. starting processing time….. ],  Node[id] ,  Introducing channel error with  code
+    // =[ …code in 4 bits… ] .
+    Message_Base *new_msg = new Message_Base();
+    new_msg->setHeader(messageIndex % maxSeqNo);
+    framing(new_msg, messages[messageIndex]);
+    std::bitset<4> error = errors[messageIndex];
+    sentMessages[messageIndex % maxSeqNo] = true;
+    messageIndex++;
+    double delayTime = par("ProcessingDelay").doubleValue();
+    if ((error & std::bitset<4>(errorType::Loss)) != std::bitset<4>(0))
+    {
+        lossFlag = true;
+        lossID = new_msg->getHeader();
+        scheduleAt(simTime() + delayTime, new_msg);
+        return;
+    }
     if ((error & std::bitset<4>(errorType::Modification)) != std::bitset<4>(0))
     {
-        modifyMessage(msg);
+        modifyMessage(new_msg);
     }
     if ((error & std::bitset<4>(errorType::Delay)) != std::bitset<4>(0))
     {
-        delayTime += par("ErrorDelay").doubleValue();
+        delayID = new_msg->getHeader();
+        delayFlag = true;
     }
     if ((error & std::bitset<4>(errorType::Duplication)) != std::bitset<4>(0))
     {
         // duplication
-        sendDelayed(msg, delayTime, gateName);
-        Message_Base *duplicated_msg = new Message_Base(*msg);
+        scheduleAt(simTime() + delayTime, new_msg);
+        Message_Base *duplicated_msg = new Message_Base(*new_msg);
         delayTime += par("DuplicationDelay").doubleValue();
-        sendDelayed(duplicated_msg, delayTime, gateName);
+        scheduleAt(simTime() + delayTime, duplicated_msg);
     }
     else
     {
-        sendDelayed(msg, delayTime, gateName);
+        scheduleAt(simTime() + delayTime, new_msg);
     }
 }
 
@@ -289,4 +366,13 @@ char Node::calculateCRC(std::string &payload)
         }
     }
     return static_cast<char>(crc);
+}
+
+void Node::sendACK(int Ack_no, int type, const char *gateName)
+{
+    double delayTime = par("ProcessingDelay").doubleValue();
+    Message_Base *new_msg = new Message_Base();
+    new_msg->setType(type);
+    new_msg->setAck_no(Ack_no);
+    scheduleAt(simTime() + delayTime, new_msg);
 }

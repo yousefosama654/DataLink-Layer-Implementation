@@ -29,6 +29,7 @@ simple Node
         double TimeoutInterval=default(0);
         double ACKLossProbability=default(0);
         int CRCpolynomial=default(0);
+        int MaximumSequenceNumber=default(0);
         gates:
         input in;
         output out;

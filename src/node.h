@@ -24,12 +24,18 @@ class Node : public cSimpleModule
 private:
   std::vector<std::bitset<4>> errors;
   std::vector<std::string> messages;
+  std::vector<bool> NACKs;
+  std::vector<bool> recivedMessages;
+  std::vector<bool> sentMessages;
   bool isSender;
   int messageIndex;
   int windowStart;
   int windowEnd;
   int maxSeqNo;
-  double delayTime;
+  bool delayFlag;
+  bool lossFlag;
+  int delayID;
+  int lossID;
 
 protected:
   virtual void initialize() override;
@@ -43,7 +49,8 @@ protected:
   void Timeout_print(int seqnum);
   std::string get_current_dir();
   void readInputFile(std::string &fileName, std::vector<std::bitset<4>> *errors, std::vector<std::string> *messages);
-  void sendMessage(Message_Base *msg, std::bitset<4> error, const char *gateName);
+  void sendMessage(const char *gateName);
+  void sendACK(int Ack_no, int type, const char *gateName);
 
 public:
   // Output file for logs
