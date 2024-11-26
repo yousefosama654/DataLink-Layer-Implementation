@@ -1,8 +1,8 @@
 version 3
-run General-0-20241125-23:50:10-15772
+run General-0-20241126-14:13:43-24580
 attr configname General
-attr datetime 20241125-23:50:10
-attr datetimef 20241125-235010
+attr datetime 20241126-14:13:43
+attr datetimef 20241126-141343
 attr experiment General
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -10,7 +10,7 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network datalink.Network
-attr processid 15772
+attr processid 24580
 attr repetition 0
 attr replication #0
 attr resultdir results
@@ -24,8 +24,7 @@ config **.ErrorDelay 4.0
 config **.WindowSize 4
 config **.TimeoutInterval 10
 config **.ACKLossProbability 0
-config **.nesma 5
-config **.CRCpolynomial 0
+config **.CRCpolynomial 0x07
 
 par Network.node0.out.channel typename "\"ned.IdealChannel\""
 par Network.node1.out.channel typename "\"ned.IdealChannel\""
@@ -39,7 +38,7 @@ par Network.node0 ErrorDelay 4
 par Network.node0 WindowSize 4
 par Network.node0 TimeoutInterval 10
 par Network.node0 ACKLossProbability 0
-par Network.node0 nesma 5
+par Network.node0 CRCpolynomial 7
 par Network.node1 typename "\"datalink.Node\""
 par Network.node1 ProcessingDelay 0.5
 par Network.node1 DuplicationDelay 0.1
@@ -48,7 +47,7 @@ par Network.node1 ErrorDelay 4
 par Network.node1 WindowSize 4
 par Network.node1 TimeoutInterval 10
 par Network.node1 ACKLossProbability 0
-par Network.node1 nesma 5
+par Network.node1 CRCpolynomial 7
 par Network.coordinator typename "\"datalink.Coordinator\""
 par Network typename "\"datalink.Network\""
 

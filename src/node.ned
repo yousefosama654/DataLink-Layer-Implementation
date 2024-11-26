@@ -28,6 +28,7 @@ simple Node
         int WindowSize=default(0);
         double TimeoutInterval=default(0);
         double ACKLossProbability=default(0);
+        int CRCpolynomial=default(0);
         gates:
         input in;
         output out;

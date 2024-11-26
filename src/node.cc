@@ -1,34 +1,15 @@
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see http://www.gnu.org/licenses/.
-//
-
 #include "node.h"
 #define GetCurrentDir _getcwd
 Define_Module(Node);
 
-double delayTime = 0;
-
 void Node::initialize()
 {
     // TODO - Generated method body
+    delayTime = 0;
     windowStart = 0;
     windowEnd = par("WindowSize").intValue();
     messageIndex = 0;
     maxSeqNo = par("WindowSize").intValue() * 2;
-
-    EV << par("TransmissionDelay").doubleValue() << "\n";
-    EV << par("ProcessingDelay").doubleValue() << "\n";
 }
 void Node::handleMessage(cMessage *msg)
 {
@@ -36,9 +17,27 @@ void Node::handleMessage(cMessage *msg)
     // EV << "hello from " << this->getName() << " value is " << paramValue << "\n";
     // EV << "hello from " << this->getName();
 
-    // print the recived message
-    EV << check_and_cast<Message_Base *>(msg)->getPayload() << endl;
     Message_Base *mptr = check_and_cast<Message_Base *>(msg);
+
+    // print the recived message
+    if (mptr->getType() == 0)
+    {
+        EV << mptr->getHeader() << endl;
+        EV << mptr->getPayload() << endl;
+        EV << mptr->getTrailer() << endl;
+    }
+    else
+    {
+        if (mptr->getType() == 1)
+        {
+            EV << "ACK" << endl;
+        }
+        else if (mptr->getType() == 2)
+        {
+            EV << "NACK" << endl;
+        }
+        EV << mptr->getAck_no() << endl;
+    }
 
     // if I recieve message from coordinator read the input file
     if (std::string(mptr->getPayload()).rfind("input", 0) == 0)
@@ -47,18 +46,86 @@ void Node::handleMessage(cMessage *msg)
         readInputFile(fileName, &errors, &messages);
         isSender = true;
     }
+    else
+    {
+        // recieving ACK
+        if (mptr->getType() == 1)
+        {
+            int Ack_no = mptr->getAck_no();
+            // advance window
+            for (int i = windowStart; i < messageIndex; i++)
+            {
+                if (i % maxSeqNo == Ack_no)
+                {
+                    windowEnd += (i - windowStart);
+                    windowStart += (i - windowStart);
+                }
+            }
+        }
+        // recieving  NACK
+        else if (mptr->getType() == 2)
+        {
+            int Ack_no = mptr->getAck_no();
+            for (int i = windowStart; i < messageIndex; i++)
+            {
+                if (i % maxSeqNo == Ack_no)
+                {
+                    Message_Base *new_msg = new Message_Base();
+                    new_msg->setPayload(messages[i].c_str());
+                    new_msg->setType(0);
+                    new_msg->setHeader(i % maxSeqNo);
+                    new_msg->setTrailer(0);
+                    sendMessage(new_msg, std::bitset<4>(0), "out");
+                }
+            }
+        }
+        // recievind data
+        else
+        {
+            // assume data is true --> check for error using crc
+            // assume out of order data discarded --> add bool vector for messages to mark the recived data out of order
+            // add de-framing
+            int seqNo = mptr->getHeader();
+            // advance window
+            for (int i = windowStart; i < windowEnd; i++)
+            {
+                if (i % maxSeqNo == seqNo)
+                {
+                    if (i == windowStart)
+                    {
+                        Message_Base *new_msg = new Message_Base();
+                        new_msg->setType(1);
+                        new_msg->setAck_no((mptr->getHeader() + 1) % maxSeqNo);
+                        sendMessage(new_msg, std::bitset<4>(0), "out");
+                        windowEnd += 1;
+                        windowStart += 1;
+                        break;
+                    }
+                    else
+                    {
+                        Message_Base *new_msg = new Message_Base();
+                        new_msg->setType(2);
+                        new_msg->setAck_no((windowStart) % maxSeqNo);
+                        sendMessage(new_msg, std::bitset<4>(0), "out");
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     if (isSender)
     {
-        delayTime = 0;
         while (messageIndex < windowEnd && messageIndex < messages.size())
         {
             delayTime += par("ProcessingDelay").doubleValue();
             Message_Base *new_msg = new Message_Base();
-            new_msg->setPayload(messages[messageIndex].c_str());
-            new_msg->setType(0);
+            // new_msg->setPayload(messages[messageIndex].c_str());
+            // add framing
+            // new_msg->setType(0);
             new_msg->setHeader(messageIndex % maxSeqNo);
-            new_msg->setTrailer(0);
+            // new_msg->setTrailer(0);
+            framing(new_msg, messages[messageIndex]);
             sendMessage(new_msg, errors[messageIndex], "out");
             messageIndex++;
         }
@@ -96,7 +163,8 @@ void Node::framing(Message_Base *mptr, std::string &payload)
 
     mptr->setPayload(modified.c_str());
     // mptr->setHeader(seq);
-    mptr->setTrailer(parity);
+    // mptr->setTrailer(parity);
+    mptr->setTrailer(calculateCRC(modified));
     mptr->setType(0);
 }
 void Node::modifyMessage(Message_Base *msg)
@@ -197,4 +265,28 @@ void Node::sendMessage(Message_Base *msg, std::bitset<4> error, const char *gate
     {
         sendDelayed(msg, delayTime, gateName);
     }
+}
+
+char Node::calculateCRC(std::string &payload)
+{
+    // CRC-8 polynomial: x^8 + x^2 + x + 1 (0x07)
+    uint8_t polynomial = par("CRCpolynomial").intValue();
+    uint8_t crc = 0x00;
+
+    for (char &byte : payload)
+    {
+        crc ^= static_cast<uint8_t>(byte);
+        for (int i = 0; i < 8; ++i)
+        {
+            if (crc & 0x80)
+            {
+                crc = (crc << 1) ^ polynomial;
+            }
+            else
+            {
+                crc <<= 1;
+            }
+        }
+    }
+    return static_cast<char>(crc);
 }

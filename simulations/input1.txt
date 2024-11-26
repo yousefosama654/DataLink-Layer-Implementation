@@ -1,4 +1,12 @@
-1000 hello nesma
+1000 hello nesma$
 0100 hello sara
 0010 hello eman
 0001 hello yousef
+1000 hello nesma2
+0100 hello sara2
+0010 hello eman2
+0001 hello yousef2
+1000 hello nesma3
+0100 hello sara3
+0010 hello eman3
+0001 hello yousef3
