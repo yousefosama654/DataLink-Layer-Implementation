@@ -5,7 +5,6 @@ import ned.IdealChannel;
 
 @license(LGPL);
 //
-// TODO documentation
 //
 network Network
 {

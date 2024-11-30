@@ -16,7 +16,6 @@
 package datalink;
 
 //
-// TODO auto-generated module
 //
 simple Node
 {

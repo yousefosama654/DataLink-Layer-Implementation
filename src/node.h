@@ -9,7 +9,6 @@
 using namespace omnetpp;
 
 /**
- * TODO - Generated class
  */
 enum errorType
 {
@@ -25,8 +24,10 @@ private:
   std::vector<std::bitset<4>> errors;
   std::vector<std::string> messages;
   std::vector<bool> NACKs;
+  std::vector<bool> ACKS;
   std::vector<bool> recivedMessages;
   std::vector<bool> sentMessages;
+  std::vector<Message_Base *> timers;
   bool isSender;
   int messageIndex;
   int windowStart;
@@ -34,13 +35,21 @@ private:
   int maxSeqNo;
   bool delayFlag;
   bool lossFlag;
+  bool duplicateFlag;
   int delayID;
   int lossID;
+  int duplicateID;
+  typedef enum
+  {
+    NACK = 0,
+    ACK = 1,
+    Data = 2,
+    timeout = 3,
+  } MsgType_t;
 
 protected:
   virtual void initialize() override;
   virtual void handleMessage(cMessage *msg) override;
-  char calculateParity(std::string &payload);
   char calculateCRC(std::string &payload);
   void framing(Message_Base *mptr, std::string &payload);
   void modifyMessage(Message_Base *msg);
@@ -51,6 +60,7 @@ protected:
   void readInputFile(std::string &fileName, std::vector<std::bitset<4>> *errors, std::vector<std::string> *messages);
   void sendMessage(const char *gateName);
   void sendACK(int Ack_no, int type, const char *gateName);
+  void scheduleTimeout(Message_Base *mptr);
 
 public:
   // Output file for logs

@@ -4,7 +4,7 @@ Define_Module(Node);
 
 void Node::initialize()
 {
-    // TODO - Generated method body
+    // TODO:Get the parameters and put them in class variables
     windowStart = 0;
     windowEnd = par("WindowSize").intValue();
     messageIndex = 0;
@@ -12,11 +12,15 @@ void Node::initialize()
     NACKs.resize(maxSeqNo, false);
     recivedMessages.resize(maxSeqNo, false);
     sentMessages.resize(maxSeqNo, false);
+    timers.resize(maxSeqNo, nullptr);
+    ACKS.resize(maxSeqNo, false);
     delayFlag = false;
     lossFlag = false;
+    duplicateFlag = false;
     isSender = false;
     delayID = -1;
     lossID = -1;
+    duplicateID = -1;
 }
 void Node::handleMessage(cMessage *msg)
 {
@@ -27,35 +31,58 @@ void Node::handleMessage(cMessage *msg)
     Message_Base *mptr = check_and_cast<Message_Base *>(msg);
 
     // if the message is self message send the processed msg and start processing new msg
+    // TODO: check the type of each self message and for each type call function sendDelayed()
+    // TODO: in order not to get ACK/NACK before curr message is processing make a flag to check if the message is processing or not and buffer any ACKS or NACKS
     if (msg->isSelfMessage())
     {
-        // print here in the output file--> At time ..., Node[id]  [sent]  frame .....
-        if (mptr->getType() == 1 || mptr->getType() == 0)
+        // TODO: call the timeout self message every time u send a message
+        if (mptr->getType() == MsgType_t::timeout)
         {
-            sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            Timeout_print(mptr->getHeader());
+            // TODO:resend the message
+            EV << "here is time out " << mptr->getHeader() << endl;
+            scheduleTimeout(mptr);
+        }
+        // Reciever send ACK or NACK
+        // print here in the output file--> At time ..., Node[id]  [sent]  frame .....
+        if (mptr->getType() == MsgType_t::ACK || mptr->getType() == MsgType_t::NACK)
+        {
+            EV << "finieshed PT ACK/NACK " << mptr->getAck_no() << endl;
+            if (par("ACKLossProbability").doubleValue() < uniform(0, 1))
+                sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
             return;
         }
+        EV << "finieshed PT data " << mptr->getHeader() << endl;
+        // Sender send the message
         if (lossFlag && lossID == mptr->getHeader())
         {
             lossFlag = false;
+            sendMessage("out");
         }
         else if (delayFlag && delayID == mptr->getHeader())
         {
             delayFlag = false;
             sendDelayed(msg, par("ErrorDelay").doubleValue() + par("TransmissionDelay").doubleValue(), "out");
+            scheduleTimeout(mptr);
+            sendMessage("out");
+        }
+        else if (duplicateFlag && duplicateID == mptr->getHeader())
+        {
+            duplicateFlag = false;
+            sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            scheduleTimeout(mptr);
         }
         else
         {
             sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            scheduleTimeout(mptr);
+            sendMessage("out");
         }
-
-        sendMessage("out");
         return;
     }
     // print the recived message from the other node
     else
     {
-
         if (mptr->getType() == 2)
         {
             EV << mptr->getHeader() << endl;
@@ -64,11 +91,11 @@ void Node::handleMessage(cMessage *msg)
         }
         else
         {
-            if (mptr->getType() == 1)
+            if (mptr->getType() == MsgType_t::ACK)
             {
                 EV << "ACK" << endl;
             }
-            else if (mptr->getType() == 0)
+            else if (mptr->getType() == MsgType_t::NACK)
             {
                 EV << "NACK" << endl;
             }
@@ -84,18 +111,20 @@ void Node::handleMessage(cMessage *msg)
     }
     else
     {
-        // recieving ACK
+        // recieving ACK (Sender)
         // ACK may be request for new frame
         // or ask for lost frame
-        if (mptr->getType() == 1)
+        if (mptr->getType() == MsgType_t::ACK)
         {
             int Ack_no = mptr->getAck_no();
-            // advance window
-
-            for (int i = windowStart; i < messageIndex; i++)
+            // Searching for which frame is ACKed
+            for (int i = windowStart; i <= messageIndex; i++)
             {
+                // EV << "ACKED " << endl;
+                // the ACKed frame is found
                 if (i % maxSeqNo == Ack_no)
                 {
+                    // if the frame is already NACKed and ACKed again
                     if (sentMessages[Ack_no] == true && NACKs[Ack_no] == true)
                     {
                         Message_Base *new_msg = new Message_Base();
@@ -106,21 +135,29 @@ void Node::handleMessage(cMessage *msg)
                     }
                     else
                     {
+                        // normal ack for some data
                         {
+                            // old windowStart 5 windowEnd 10
                             int oldWindowStart = windowStart;
-                            windowEnd += (i - windowStart);
-                            windowStart += (i - windowStart);
-                            for (int i = oldWindowStart; i < windowStart; i++)
+                            //  windowStart 5 WindowSize 4 5 6 7 8
+                            windowStart = i + 1;
+                            windowEnd = windowStart + par("WindowSize").intValue();
+                            for (int j = oldWindowStart; j < windowStart; j++)
                             {
-                                sentMessages[i] = false;
-                                NACKs[i] = false;
+                                sentMessages[j % maxSeqNo] = false;
+                                NACKs[j % maxSeqNo] = false;
+                                ACKS[j % maxSeqNo] = true;
+                                // EV<<"ACKED "<<j<<endl;
+                                cancelAndDelete(timers[j % maxSeqNo]);
+                                timers[j % maxSeqNo] = nullptr;
                             }
                         }
                     }
+                    break;
                 }
             }
         }
-        // recieving  NACK
+        // recieving  NACK (Sender)
         else if (mptr->getType() == 0)
         {
             int Ack_no = mptr->getAck_no();
@@ -137,15 +174,15 @@ void Node::handleMessage(cMessage *msg)
                 }
             }
         }
-        // recievind data
+        // recievind data (Reciever)
         else
         {
-            // TODO add de-framing--------------------------------------
+            // TODO: add de-framing
             int seqNo = mptr->getHeader();
             // if data is already recived discared it
             if (recivedMessages[seqNo] == true)
                 return;
-            // check for error using crc
+            // TODO:check for error using crc and if error stay silent
             // if(calculateCRC(mptr->getPayload()) != mptr->getTrailer())
             //     return;
             for (int i = windowStart; i < windowEnd; i++)
@@ -172,10 +209,10 @@ void Node::handleMessage(cMessage *msg)
                     // if data is out of order send NACK
                     else
                     {
-                        int type = 1;
+                        int type = MsgType_t::ACK;
                         if (NACKs[seqNo] == false)
                         {
-                            type = (0);
+                            type = MsgType_t::NACK;
                             NACKs[seqNo] = true;
                         }
                         int ack_no = ((windowStart) % maxSeqNo);
@@ -186,27 +223,14 @@ void Node::handleMessage(cMessage *msg)
             }
         }
     }
-
     if (isSender)
     {
         sendMessage("out");
     }
 }
 
-char Node::calculateParity(std::string &payload)
-{
-    char parityByte = 0;
-    int payloadSize = payload.size();
-    for (int i = 0; i < payloadSize; ++i)
-    {
-        parityByte = (parityByte ^ payload[i]);
-    }
-    return parityByte;
-}
-
 void Node::framing(Message_Base *mptr, std::string &payload)
 {
-    // TODO - Generated method body
     std::string modified = "$";
     int payloadSize = payload.size();
 
@@ -220,11 +244,8 @@ void Node::framing(Message_Base *mptr, std::string &payload)
     }
     modified += "$";
 
-    char parity = calculateParity(modified);
-
     mptr->setPayload(modified.c_str());
     // mptr->setHeader(seq);
-    // mptr->setTrailer(parity);
     mptr->setTrailer(calculateCRC(modified));
     mptr->setType(2);
 }
@@ -238,9 +259,7 @@ void Node::modifyMessage(Message_Base *msg)
 }
 void Node::openOutputFile()
 {
-
     outputFile.open("output.txt", std::ios::out | std::ios::trunc);
-
     // Return if file was not opened
     if (!outputFile.is_open())
     {
@@ -278,7 +297,7 @@ void Node::readInputFile(std::string &fileName, std::vector<std::bitset<4>> *err
     // Open the file
     std::ifstream input_file;
     input_file.open(get_current_dir() + "\\" + fileName, std::ios::in);
-    // Return if file was not opened
+    // Return and print error if file was not opened
     if (!input_file.is_open())
     {
         std::cerr << "[NODE] Error opening file." << std::endl;
@@ -297,7 +316,20 @@ void Node::readInputFile(std::string &fileName, std::vector<std::bitset<4>> *err
         input_file.close();
     }
 }
-
+void Node::scheduleTimeout(Message_Base *mptr)
+{
+    int seqNum = mptr->getHeader();
+    if (!timers[seqNum])
+    {
+        timers[seqNum] = new Message_Base("");
+        timers[seqNum]->setHeader(mptr->getHeader());
+        timers[seqNum]->setPayload(mptr->getPayload());
+        timers[seqNum]->setTrailer(mptr->getTrailer());
+        timers[seqNum]->setType(MsgType_t::timeout);
+        timers[seqNum]->setAck_no(mptr->getAck_no());
+        scheduleAfter(par("TimeoutInterval"), timers[seqNum]);
+    }
+}
 void Node::sendMessage(const char *gateName)
 {
     if (messageIndex >= windowEnd || messageIndex >= messages.size())
@@ -333,6 +365,8 @@ void Node::sendMessage(const char *gateName)
     if ((error & std::bitset<4>(errorType::Duplication)) != std::bitset<4>(0))
     {
         // duplication
+        duplicateFlag = true;
+        duplicateID = new_msg->getHeader();
         scheduleAt(simTime() + delayTime, new_msg);
         Message_Base *duplicated_msg = new Message_Base(*new_msg);
         delayTime += par("DuplicationDelay").doubleValue();
@@ -344,9 +378,10 @@ void Node::sendMessage(const char *gateName)
     }
 }
 
+// TODO: implement the CRC function and check if this working
 char Node::calculateCRC(std::string &payload)
 {
-    // CRC-8 polynomial: x^8 + x^2 + x + 1 (0x07)
+    // CRC-8 polynomial: x^2 + x + 1 (0x07)
     uint8_t polynomial = par("CRCpolynomial").intValue();
     uint8_t crc = 0x00;
 

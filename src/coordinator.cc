@@ -7,7 +7,6 @@ Define_Module(Coordinator);
 
 void Coordinator::initialize()
 {
-    // TODO - Generated method body
     std::string fileName = "coordinator.txt";
     int nodeID;
     float startTime;
@@ -28,11 +27,9 @@ void Coordinator::initialize()
 
 void Coordinator::handleMessage(cMessage *msg)
 {
-    // TODO - Generated method body
 }
 void Coordinator::readCoordinatorFile(std::string &fileName, int &nodeID, float &start_t)
 {
-    // TODO - Generated method body
     // Open the file
     std::ifstream coordinator_file;
     // coordinator_file.open(fileName, std::ios::in);
