@@ -192,6 +192,7 @@ void Node::handleMessage(cMessage *msg)
                     // if data is in order send ACK then advance recieve window
                     if (i == windowStart)
                     {
+                        EV << "in of order data " << seqNo << endl;
                         recivedMessages[seqNo] = true;
                         int i = seqNo;
                         while (recivedMessages[i] == true)
@@ -209,11 +210,13 @@ void Node::handleMessage(cMessage *msg)
                     // if data is out of order send NACK
                     else
                     {
+                        EV << "out of order data " << seqNo << endl;
+                        EV << " here is i " << i % maxSeqNo << endl;
                         int type = MsgType_t::ACK;
-                        if (NACKs[seqNo] == false)
+                        if (NACKs[i % maxSeqNo] == false)
                         {
                             type = MsgType_t::NACK;
-                            NACKs[seqNo] = true;
+                            NACKs[i % maxSeqNo] = true;
                         }
                         int ack_no = ((windowStart) % maxSeqNo);
                         sendACK(ack_no, type, "out");
