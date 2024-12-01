@@ -125,11 +125,12 @@ void Node::handleMessage(cMessage *msg)
                 if (i % maxSeqNo == Ack_no)
                 {
                     // if the frame is already NACKed and ACKed again
-                    if (sentMessages[Ack_no] == true && NACKs[Ack_no] == true)
+                    if (NACKs[Ack_no] == true)
                     {
                         Message_Base *new_msg = new Message_Base();
                         framing(new_msg, messages[i]);
                         new_msg->setHeader(i % maxSeqNo);
+                        EV << "simTime() + 0.001" << endl;
                         scheduleAt(simTime() + 0.001, new_msg);
                         EV << "resending frame " << i << endl;
                     }
@@ -140,7 +141,7 @@ void Node::handleMessage(cMessage *msg)
                             // old windowStart 5 windowEnd 10
                             int oldWindowStart = windowStart;
                             //  windowStart 5 WindowSize 4 5 6 7 8
-                            windowStart = i + 1;
+                            windowStart = i;
                             windowEnd = windowStart + par("WindowSize").intValue();
                             for (int j = oldWindowStart; j < windowStart; j++)
                             {
@@ -161,11 +162,19 @@ void Node::handleMessage(cMessage *msg)
         else if (mptr->getType() == 0)
         {
             int Ack_no = mptr->getAck_no();
+            // EV << "entering sender NACK\n";
             for (int i = windowStart; i < messageIndex; i++)
             {
+                // EV << "entering sender NACK loop " << i << endl;
+                // EV << "windowStart " << windowStart << " messageIndex " << messageIndex << endl;
                 if (i % maxSeqNo == Ack_no)
                 {
                     NACKs[Ack_no] = true;
+                    EV << "sender NACKS\n";
+                    for (int i = 0; i < 8; i++)
+                    {
+                        EV << NACKs[i] << " ";
+                    }
                     Message_Base *new_msg = new Message_Base();
                     framing(new_msg, messages[i]);
                     new_msg->setHeader(i % maxSeqNo);
@@ -187,12 +196,15 @@ void Node::handleMessage(cMessage *msg)
             //     return;
             for (int i = windowStart; i < windowEnd; i++)
             {
+                // i [1-5]
+                // seqNo 2
                 if (i % maxSeqNo == seqNo)
                 {
                     // if data is in order send ACK then advance recieve window
                     if (i == windowStart)
                     {
                         EV << "in of order data " << seqNo << endl;
+                        // recivedMessages
                         recivedMessages[seqNo] = true;
                         int i = seqNo;
                         while (recivedMessages[i] == true)
@@ -203,7 +215,14 @@ void Node::handleMessage(cMessage *msg)
                             recivedMessages[(windowEnd - 1) % maxSeqNo] = false;
                             NACKs[(windowEnd - 1) % maxSeqNo] = false;
                         }
+                        EV << "printing recivedMessages \n";
+                        EV << "windowStart " << windowStart << " windowEnd " << windowEnd << endl;
+                        for (int i = 0; i < 8; i++)
+                        {
+                            EV << recivedMessages[i] << " ";
+                        }
                         int ack_no = (windowStart % maxSeqNo);
+                        // EV << "special case ack:: " << ack_no << " windowStart " << windowStart << " windowend " << windowEnd << endl;
                         sendACK(ack_no, 1, "out");
                         break;
                     }
@@ -212,11 +231,17 @@ void Node::handleMessage(cMessage *msg)
                     {
                         EV << "out of order data " << seqNo << endl;
                         EV << " here is i " << i % maxSeqNo << endl;
+                        recivedMessages[seqNo] = true;
                         int type = MsgType_t::ACK;
-                        if (NACKs[i % maxSeqNo] == false)
+                        if (NACKs[windowStart % maxSeqNo] == false)
                         {
                             type = MsgType_t::NACK;
-                            NACKs[i % maxSeqNo] = true;
+                            NACKs[windowStart % maxSeqNo] = true;
+                            EV << "windowStart " << windowStart << " windowend " << windowEnd << endl;
+                            for (int i = 0; i < 8; i++)
+                            {
+                                EV << NACKs[i] << " ";
+                            }
                         }
                         int ack_no = ((windowStart) % maxSeqNo);
                         sendACK(ack_no, type, "out");
@@ -257,7 +282,7 @@ void Node::modifyMessage(Message_Base *msg)
     std::string payload = msg->getPayload();
     int bitIdx = rand() % 8;
     int byteIdx = rand() % payload.length();
-    payload[byteIdx] ^= (1 << bitIdx);
+    payload[byteIdx] += 1;
     msg->setPayload(payload.c_str());
 }
 void Node::openOutputFile()

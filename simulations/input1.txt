@@ -1,5 +1,10 @@
-0010 hello eman
-0001 hello yousef
-1000 hello nesma2
-0010 hello eman2
+0010 hello data0
+0001 hello data1
+1000 hello data2
+0010 hello data3
+0001 hello data4
+1000 hello data5
+0100 hello data6
+0010 hello data7
+0001 hello data8
 
