@@ -21,6 +21,7 @@ void Node::initialize()
     delayID = -1;
     lossID = -1;
     duplicateID = -1;
+    ackLossFlag = false;
 }
 void Node::handleMessage(cMessage *msg)
 {
@@ -50,6 +51,10 @@ void Node::handleMessage(cMessage *msg)
             EV << "finieshed PT ACK/NACK " << mptr->getAck_no() << endl;
             if (par("ACKLossProbability").doubleValue() < uniform(0, 1))
                 sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            else
+                ackLossFlag = true;
+
+            transmitColnlrolFrame_print(mptr);
             return;
         }
         EV << "finieshed PT data " << mptr->getHeader() << endl;
@@ -62,6 +67,7 @@ void Node::handleMessage(cMessage *msg)
         else if (delayFlag && delayID == mptr->getHeader())
         {
             delayFlag = false;
+            receivingDataFrame_print(mptr);
             sendDelayed(msg, par("ErrorDelay").doubleValue() + par("TransmissionDelay").doubleValue(), "out");
             scheduleTimeout(mptr);
             sendMessage("out");
@@ -69,11 +75,13 @@ void Node::handleMessage(cMessage *msg)
         else if (duplicateFlag && duplicateID == mptr->getHeader())
         {
             duplicateFlag = false;
+            receivingDataFrame_print(mptr);
             sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
             scheduleTimeout(mptr);
         }
         else
         {
+            receivingDataFrame_print(mptr);
             sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
             scheduleTimeout(mptr);
             sendMessage("out");
@@ -301,7 +309,7 @@ void Node::fillOutputFile()
     openOutputFile();
     for (auto it : outputBuffer)
     {
-        outputFile << it << std::endl;
+        outputFile << it;
     }
     outputFile.close();
 }
@@ -309,7 +317,66 @@ void Node::Timeout_print(int seqnum)
 {
 
     std::string line_to_print = "Time out event at time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] for frame with seq_num=[" + std::to_string(seqnum) + "]; \n";
-    std::cout << line_to_print << std::endl;
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::readLine_print(std::bitset<4> error)
+{
+    std::string line_to_print = "At time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] Introducing channel error with  code [" + error.to_string() + "]; \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::transmitDataFrame_print(Message_Base *msg, int modBit)
+{
+    int num = messageIndex - 1;
+    std::bitset<4> error = errors[num];
+    // Correct the delayValue computation
+    double delayValue = (error[3] == 1) ? par("ErrorDelay").doubleValue() + simTime().dbl() : 0;
+    int dupValue = (error[3] == 0) ? 0 : (delayFlag == true) ? 1
+                                                             : 2;
+    int modValue = (error[0] == 0) ? -1 : modBit;
+    // Correct the multi-line string concatenation
+    std::string line_to_print =
+        "at time [" + simTime().str() +
+        "], at Node [" + std::to_string(this->getName()[4]) +
+        "]  frame with seq_num = [" + std::to_string(msg->getHeader()) +
+        "] and payload = [" + msg->getPayload() +
+        "] and trailer = [" + msg->getTrailer() +
+        "] Modified [" + std::to_string(modValue) +
+        "], Lost [" + std::to_string(error[1]) +
+        "] Duplicate[" + std::to_string(dupValue) +
+        "], Delay [" + std::to_string(delayValue) + "]  \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::transmitColnlrolFrame_print(Message_Base *msg)
+{
+
+    std::string type = (msg->getType() == MsgType_t::ACK) ? "ACK" : "NACK";
+    std::string lossValue = (ackLossFlag) ? "yes" : "No";
+    ackLossFlag = false;
+    // Correct the multi-line string concatenation
+    std::string line_to_print =
+        "at time [" + simTime().str() +
+        "], at Node [" + std::to_string(this->getName()[4]) +
+        "]  Sending [" + type +
+        "] with number = [" + std::to_string(msg->getAck_no()) +
+        "] loss = [" + lossValue + "]  \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::receivingDataFrame_print(Message_Base *msg)
+{
+    // Uploading payload=[…..] and seq_num =[…]  to the network layer
+    std::string line_to_print =
+        "Uploading payload [" + std::string(msg->getPayload()) +
+        "] and seq_num = [" + std::to_string(msg->getHeader()) +
+        "] to the network layer  \n";
+    // std::cout << line_to_print << std::endl;
     outputBuffer.push_back(line_to_print);
 }
 
@@ -367,6 +434,7 @@ void Node::sendMessage(const char *gateName)
     // print here in the output file
     //     At time [.. starting processing time….. ],  Node[id] ,  Introducing channel error with  code
     // =[ …code in 4 bits… ] .
+    readLine_print(errors[messageIndex]);
     Message_Base *new_msg = new Message_Base();
     new_msg->setHeader(messageIndex % maxSeqNo);
     framing(new_msg, messages[messageIndex]);
@@ -438,4 +506,9 @@ void Node::sendACK(int Ack_no, int type, const char *gateName)
     new_msg->setType(type);
     new_msg->setAck_no(Ack_no);
     scheduleAt(simTime() + delayTime, new_msg);
+}
+
+void Node::finish()
+{
+    fillOutputFile();
 }
