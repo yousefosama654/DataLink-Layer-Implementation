@@ -7,7 +7,7 @@
 #include <iostream>
 #include <bitset>
 using namespace omnetpp;
-
+using namespace std;
 /**
  */
 enum errorType
@@ -39,6 +39,7 @@ private:
   int delayID;
   int lossID;
   int duplicateID;
+
   typedef enum
   {
     NACK = 0,
@@ -50,9 +51,10 @@ private:
 protected:
   virtual void initialize() override;
   virtual void handleMessage(cMessage *msg) override;
-  char calculateCRC(std::string &payload);
-  void framing(Message_Base *mptr, std::string &payload);
-  void modifyMessage(Message_Base *msg);
+  char calculateCRC(std::string payload);
+  string stringStuffing(string payload);
+  void framing(Message_Base *mptr, int seqNum, string payload, bool modifyFlag = false);
+  string modifyMessage(string payload);
   void openOutputFile();
   void fillOutputFile();
   void Timeout_print(int seqnum);
@@ -60,7 +62,8 @@ protected:
   void readInputFile(std::string &fileName, std::vector<std::bitset<4>> *errors, std::vector<std::string> *messages);
   void sendMessage(const char *gateName);
   void sendACK(int Ack_no, int type, const char *gateName);
-  void scheduleTimeout(Message_Base *mptr);
+  void scheduleTimeout(int seqNum);
+  void transmitMessage(int seqNum, MsgType_t type);
 
 public:
   // Output file for logs
