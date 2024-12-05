@@ -39,7 +39,11 @@ private:
   int delayID;
   int lossID;
   int duplicateID;
+<<<<<<< HEAD
 
+=======
+  bool ackLossFlag;
+>>>>>>> 549b1034981bfcf2e46c538c60ab4fd5d7c50f1b
   typedef enum
   {
     NACK = 0,
@@ -58,16 +62,28 @@ protected:
   void openOutputFile();
   void fillOutputFile();
   void Timeout_print(int seqnum);
+  void readLine_print(std::bitset<4> error);
+  void transmitDataFrame_print(Message_Base *msg, int modBit = -1);
+  void transmitColnlrolFrame_print(Message_Base *msg);
+  void receivingDataFrame_print(Message_Base *msg);
   std::string get_current_dir();
   void readInputFile(std::string &fileName, std::vector<std::bitset<4>> *errors, std::vector<std::string> *messages);
   void sendMessage(const char *gateName);
   void sendACK(int Ack_no, int type, const char *gateName);
+<<<<<<< HEAD
   void scheduleTimeout(int seqNum);
   void transmitMessage(int seqNum, MsgType_t type);
+=======
+  void scheduleTimeout(Message_Base *mptr);
+  virtual void finish() override;
+>>>>>>> 549b1034981bfcf2e46c538c60ab4fd5d7c50f1b
 
 public:
   // Output file for logs
-  std::fstream outputFile;
-  std::vector<std::string> outputBuffer;
+  static std::fstream outputFile;
+  static std::vector<std::string> outputBuffer;
 };
+
+std::fstream Node::outputFile = nullptr;
+std::vector<std::string> Node::outputBuffer = {};
 #endif

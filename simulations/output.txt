@@ -1,0 +1,32 @@
+At time [2], at Node [1] Introducing channel error with  code [0010]; 
+Uploading payload [$ hello data0$] and seq_num = [0] to the network layer  
+Uploading payload [$ hello data0$] and seq_num = [0] to the network layer  
+At time [2.6], at Node [1] Introducing channel error with  code [0001]; 
+Uploading payload [$ hello data1$] and seq_num = [1] to the network layer  
+At time [3.1], at Node [1] Introducing channel error with  code [1000]; 
+Uploading payload [$ hello dbta2$] and seq_num = [2] to the network layer  
+At time [3.6], at Node [1] Introducing channel error with  code [0010]; 
+at time [4], at Node [48]  Sending [ACK] with number = [1] loss = [No]  
+Uploading payload [$ hello data3$] and seq_num = [3] to the network layer  
+Uploading payload [$ hello data3$] and seq_num = [3] to the network layer  
+At time [5], at Node [1] Introducing channel error with  code [0001]; 
+at time [5.1], at Node [48]  Sending [NACK] with number = [1] loss = [No]  
+Uploading payload [$ hello data4$] and seq_num = [4] to the network layer  
+at time [5.6], at Node [48]  Sending [ACK] with number = [1] loss = [No]  
+Uploading payload [$ hello data1$] and seq_num = [1] to the network layer  
+Uploading payload [$ hello data1$] and seq_num = [1] to the network layer  
+at time [7.601], at Node [48]  Sending [ACK] with number = [4] loss = [No]  
+At time [8.601], at Node [1] Introducing channel error with  code [1000]; 
+Uploading payload [$!hello data5$] and seq_num = [5] to the network layer  
+At time [9.101], at Node [1] Introducing channel error with  code [0100]; 
+At time [9.601], at Node [1] Introducing channel error with  code [0010]; 
+Uploading payload [$ hello data7$] and seq_num = [7] to the network layer  
+Uploading payload [$ hello data7$] and seq_num = [7] to the network layer  
+at time [10.601], at Node [48]  Sending [NACK] with number = [4] loss = [No]  
+at time [11], at Node [48]  Sending [ACK] with number = [6] loss = [No]  
+at time [11.601], at Node [48]  Sending [NACK] with number = [6] loss = [No]  
+Uploading payload [$ hello data4$] and seq_num = [4] to the network layer  
+At time [12], at Node [1] Introducing channel error with  code [0001]; 
+Uploading payload [$ hello data8$] and seq_num = [0] to the network layer  
+Uploading payload [$ hello data6$] and seq_num = [6] to the network layer  
+at time [14.102], at Node [48]  Sending [ACK] with number = [1] loss = [No]  

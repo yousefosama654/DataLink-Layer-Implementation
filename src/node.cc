@@ -21,6 +21,7 @@ void Node::initialize()
     delayID = -1;
     lossID = -1;
     duplicateID = -1;
+    ackLossFlag = false;
 }
 void Node::transmitMessage(int seqNum, MsgType_t type)
 {
@@ -58,6 +59,10 @@ void Node::handleMessage(cMessage *msg)
             EV << "finieshed PT ACK/NACK " << mptr->getAck_no() << endl;
             if (par("ACKLossProbability").doubleValue() < uniform(0, 1))
                 sendDelayed(msg, par("TransmissionDelay").doubleValue(), "out");
+            else
+                ackLossFlag = true;
+
+            transmitColnlrolFrame_print(mptr);
             return;
         }
         EV << "finieshed PT data " << mptr->getHeader() << endl;
@@ -151,9 +156,7 @@ void Node::handleMessage(cMessage *msg)
                     {
                         // normal ack for some data
                         {
-                            // old windowStart 5 windowEnd 10
                             int oldWindowStart = windowStart;
-                            //  windowStart 5 WindowSize 4 5 6 7 8
                             windowStart = i;
                             windowEnd = windowStart + par("WindowSize").intValue();
                             for (int j = oldWindowStart; j < windowStart; j++)
@@ -207,8 +210,6 @@ void Node::handleMessage(cMessage *msg)
                 return;
             for (int i = windowStart; i < windowEnd; i++)
             {
-                // i [1-5]
-                // seqNo 2
                 if (i % maxSeqNo == seqNo)
                 {
                     // if data is in order send ACK then advance recieve window
@@ -293,15 +294,6 @@ void Node::framing(Message_Base *mptr, int seqNum, string payload, bool modifyFl
     mptr->setHeader(seqNum);
     mptr->setTrailer(calculateCRC(stuffedPayload));
     mptr->setType(MsgType_t::Data);
-    // if (seqNum == 1)
-    // {
-    //     EV << "Message 1 Data Members:" << endl;
-    //     EV << "Header: " << mptr->getHeader() << endl;
-    //     EV << "Payload: " << mptr->getPayload() << endl;
-    //     EV << "Trailer: " << mptr->getTrailer() << endl;
-    //     EV << "Type: " << mptr->getType() << endl;
-    //     EV << "ModifyFlag: " << modifyFlag << endl;
-    // }
 }
 string Node::modifyMessage(string payload)
 {
@@ -375,10 +367,7 @@ void Node::scheduleTimeout(int seqNum)
     {
         timers[seqNum] = new Message_Base("");
         timers[seqNum]->setHeader(seqNum);
-        // timers[seqNum]->setPayload(mptr->getPayload());
-        // timers[seqNum]->setTrailer(mptr->getTrailer());
         timers[seqNum]->setType(MsgType_t::timeout);
-        // timers[seqNum]->setAck_no(mptr->getAck_no());
         scheduleAfter(par("TimeoutInterval"), timers[seqNum]);
     }
 }
@@ -424,7 +413,6 @@ char Node::calculateCRC(string payload)
     // CRC-8 polynomial: x^2 + x + 1 (0x07)
     uint8_t polynomial = par("CRCpolynomial").intValue();
     uint8_t crc = 0x00;
-
     for (char &byte : payload)
     {
         crc ^= static_cast<uint8_t>(byte);
@@ -450,4 +438,9 @@ void Node::sendACK(int Ack_no, int type, const char *gateName)
     new_msg->setType(type);
     new_msg->setAck_no(Ack_no);
     scheduleAfter(delayTime, new_msg);
+}
+
+void Node::finish()
+{
+    fillOutputFile();
 }
