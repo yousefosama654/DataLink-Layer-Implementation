@@ -244,6 +244,7 @@ void Node::handleMessage(cMessage *msg)
                         EV << "in of order data " << seqNo << endl;
 
                         // if the data in order so write it in the output file and send to the network Layer
+                        deframing(mptr);
                         receivingDataFrame_print(mptr->getHeader(), std::string(mptr->getPayload()));
                         // EV << "print " << mptr->getHeader() << std::string(mptr->getPayload()) << seqNo << endl;
                         int turnNo = (seqNo + 1) % maxSeqNo;
@@ -286,6 +287,7 @@ void Node::handleMessage(cMessage *msg)
 
                         // EV << "inserting to network layer\n";
                         // EV << "inserting to network layer" << seqNo << mptr->getPayload() << "\n";
+                        deframing(mptr);
                         toNetworkLayer.insert({seqNo, std::string(mptr->getPayload())});
                         recivedMessages[seqNo] = true;
                         int type = MsgType_t::ACK;
@@ -340,6 +342,26 @@ void Node::framing(Message_Base *mptr, int seqNum, string payload, bool modifyFl
     mptr->setTrailer(calculateCRC(stuffedPayload));
     mptr->setType(MsgType_t::Data);
 }
+
+void Node::deframing(Message_Base *mptr)
+{
+    string stuffed=mptr->getPayload();
+    // Remove the start and end flag
+    stuffed = stuffed.substr(1, stuffed.size() - 2);
+
+    string unstuffed;
+    int stuffedSize = stuffed.size();
+    for (int i = 0; i < stuffedSize; i++) {
+        if (stuffed[i] == '/') {
+            // Skip the escape character and take the next character as is
+            i++;
+        }
+        unstuffed += stuffed[i];
+    }
+    mptr->setPayload(unstuffed.c_str());
+}
+
+
 string Node::modifyMessage(string payload)
 {
     int byteIdx = rand() % payload.length();

@@ -61,6 +61,7 @@ protected:
   char calculateCRC(std::string payload);
   string stringStuffing(string payload);
   void framing(Message_Base *mptr, int seqNum, string payload, bool modifyFlag = false);
+  void deframing(Message_Base *mptr);
   string modifyMessage(string payload);
   void openOutputFile();
   void fillOutputFile();
