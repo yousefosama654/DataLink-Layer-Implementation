@@ -22,16 +22,21 @@ void Node::initialize()
     lossID = -1;
     duplicateID = -1;
     ackLossFlag = false;
+    busy = false;
 }
-void Node::transmitMessage(int seqNum, MsgType_t type)
+void Node::transmitMessage(int seqNum, MsgType_t type, bool delay = false)
 {
+    busy = true;
     for (int i = windowStart; i < windowEnd; i++)
     {
         if (i % maxSeqNo == seqNum)
         {
             Message_Base *new_msg = new Message_Base();
             framing(new_msg, seqNum, messages[i]);
-            scheduleAfter(par("ProcessingDelay"), new_msg);
+            if (delay)
+                scheduleAfter(0.001, new_msg);
+            else
+                scheduleAfter(par("ProcessingDelay"), new_msg);
         }
     }
 }
@@ -47,9 +52,12 @@ void Node::handleMessage(cMessage *msg)
         if (mptr->getType() == MsgType_t::timeout)
         {
             Timeout_print(mptr->getHeader());
-            // TODO:resend the message
+            // resend the message
             EV << "here is time out " << mptr->getHeader() << endl;
-            transmitMessage(mptr->getHeader(), MsgType_t::Data);
+            if (busy == false)
+                transmitMessage(mptr->getHeader(), MsgType_t::Data);
+            else
+                messageQueue.push(std::make_pair(mptr->getHeader(), false));
             return;
         }
         // Reciever send ACK or NACK
@@ -68,12 +76,13 @@ void Node::handleMessage(cMessage *msg)
         EV << "finieshed PT data " << mptr->getHeader() << endl;
         double totalDelayTime = par("TransmissionDelay").doubleValue();
         // Sender send the message
-        // TODO:implement errors togther
+
         EV << "Flags - Delay: " << delayFlag << ", Loss: " << lossFlag << ", Duplicate: " << duplicateFlag << endl;
         if (lossFlag)
         {
             lossFlag = false;
             EV << "loss frame (isSelfMessage) is " << mptr->getHeader() << endl;
+            busy = false;
             sendMessage("out");
             scheduleTimeout(mptr->getHeader());
             return;
@@ -86,15 +95,18 @@ void Node::handleMessage(cMessage *msg)
             }
             totalDelayTime += par("ErrorDelay").doubleValue();
         }
+        transmitDataFrame_print(mptr);
         sendDelayed(mptr, totalDelayTime, "out");
         scheduleTimeout(mptr->getHeader());
         if (duplicateFlag)
         {
             // in order nto to read the next line directly
             duplicateFlag = false;
+            busy = true;
         }
         else
         {
+            busy = false;
             sendMessage("out");
         }
         return;
@@ -146,11 +158,18 @@ void Node::handleMessage(cMessage *msg)
                     // if the frame is already NACKed and ACKed again
                     if (NACKs[Ack_no] == true)
                     {
-                        Message_Base *new_msg = new Message_Base();
-                        framing(new_msg, i % maxSeqNo, messages[i]);
-                        EV << "simTime() + 0.001" << endl;
-                        scheduleAfter(0.001, new_msg);
-                        EV << "resending frame " << i << endl;
+                        if (busy == false)
+                        {
+                            Message_Base *new_msg = new Message_Base();
+                            framing(new_msg, i % maxSeqNo, messages[i]);
+                            EV << "simTime() + 0.001" << endl;
+                            scheduleAfter(0.001, new_msg);
+                            EV << "resending frame " << i << endl;
+                        }
+                        else
+                        {
+                            messageQueue.push(std::make_pair(Ack_no, true));
+                        }
                     }
                     else
                     {
@@ -190,10 +209,18 @@ void Node::handleMessage(cMessage *msg)
                     {
                         EV << NACKs[i] << " ";
                     }
-                    Message_Base *new_msg = new Message_Base();
-                    framing(new_msg, i % maxSeqNo, messages[i]);
-                    scheduleAfter(0.001, new_msg);
-                    EV << "resending frame " << i << endl;
+                    if (busy == false)
+                    {
+                        Message_Base *new_msg = new Message_Base();
+                        framing(new_msg, i % maxSeqNo, messages[i]);
+                        scheduleAfter(0.001, new_msg);
+                        EV << "resending frame " << i << endl;
+                    }
+                    else
+                    {
+                        messageQueue.push(std::make_pair(Ack_no, true));
+                        EV << "resending frame " << i << " when it is not busy" << endl;
+                    }
                 }
             }
         }
@@ -205,7 +232,6 @@ void Node::handleMessage(cMessage *msg)
             // if data is already recived discared it
             if (recivedMessages[seqNo] == true)
                 return;
-            // TODO:check for error using crc and if error stay silent
             if (calculateCRC(string(mptr->getPayload())) != mptr->getTrailer())
                 return;
             for (int i = windowStart; i < windowEnd; i++)
@@ -216,6 +242,19 @@ void Node::handleMessage(cMessage *msg)
                     if (i == windowStart)
                     {
                         EV << "in of order data " << seqNo << endl;
+
+                        // if the data in order so write it in the output file and send to the network Layer
+                        receivingDataFrame_print(mptr->getHeader(), std::string(mptr->getPayload()));
+                        // EV << "print " << mptr->getHeader() << std::string(mptr->getPayload()) << seqNo << endl;
+                        int turnNo = (seqNo + 1) % maxSeqNo;
+                        auto it = toNetworkLayer.find(turnNo);
+                        while (it != toNetworkLayer.end())
+                        {
+                            EV << "print to network" << turnNo << it->second << seqNo << endl;
+                            receivingDataFrame_print(turnNo, it->second);
+                            turnNo = (turnNo + 1) % maxSeqNo;
+                            it = toNetworkLayer.find(turnNo);
+                        }
                         // recivedMessages
                         recivedMessages[seqNo] = true;
                         int i = seqNo;
@@ -243,6 +282,11 @@ void Node::handleMessage(cMessage *msg)
                     {
                         EV << "out of order data " << seqNo << endl;
                         EV << " here is i " << i % maxSeqNo << endl;
+                        // insert to be printed in order when we send it to Network Layer
+
+                        // EV << "inserting to network layer\n";
+                        // EV << "inserting to network layer" << seqNo << mptr->getPayload() << "\n";
+                        toNetworkLayer.insert({seqNo, std::string(mptr->getPayload())});
                         recivedMessages[seqNo] = true;
                         int type = MsgType_t::ACK;
                         if (NACKs[windowStart % maxSeqNo] == false)
@@ -268,6 +312,7 @@ void Node::handleMessage(cMessage *msg)
         sendMessage("out");
     }
 }
+
 string Node::stringStuffing(string payload)
 {
     string stuffed = "$";
@@ -299,6 +344,7 @@ string Node::modifyMessage(string payload)
 {
     int byteIdx = rand() % payload.length();
     payload[byteIdx] += 1;
+    modifiedBit = (byteIdx + 1) * 8;
     return payload.c_str();
 }
 void Node::openOutputFile()
@@ -310,23 +356,6 @@ void Node::openOutputFile()
         cerr << "[NODE] Error opening output file." << endl;
         return;
     }
-}
-
-void Node::fillOutputFile()
-{
-    openOutputFile();
-    for (auto it : outputBuffer)
-    {
-        outputFile << it << endl;
-    }
-    outputFile.close();
-}
-void Node::Timeout_print(int seqnum)
-{
-
-    string line_to_print = "Time out event at time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] for frame with seq_num=[" + to_string(seqnum) + "]; \n";
-    cout << line_to_print << endl;
-    outputBuffer.push_back(line_to_print);
 }
 
 string Node::get_current_dir()
@@ -373,6 +402,8 @@ void Node::scheduleTimeout(int seqNum)
 }
 void Node::sendMessage(const char *gateName)
 {
+    if (busy == true)
+        return;
     delayFlag = false;
     lossFlag = false;
     duplicateFlag = false;
@@ -381,10 +412,18 @@ void Node::sendMessage(const char *gateName)
     {
         return;
     }
+    if (!messageQueue.empty())
+    {
+        int seqNum = messageQueue.front().first;
+        int flag = messageQueue.front().second;
+        transmitMessage(seqNum, MsgType_t::Data, flag);
+        return;
+    }
     Message_Base *new_msg = new Message_Base();
     bitset<4> error = errors[messageIndex];
     sentMessages[messageIndex % maxSeqNo] = true;
     framing(new_msg, messageIndex % maxSeqNo, messages[messageIndex], error[3]);
+    readLine_print(error);
     messageIndex++;
     if ((error & bitset<4>(errorType::Loss)) != bitset<4>(0))
     {
@@ -404,6 +443,7 @@ void Node::sendMessage(const char *gateName)
         Message_Base *duplicated_msg = new Message_Base(*new_msg);
         scheduleAfter(par("DuplicationDelay").doubleValue() + par("ProcessingDelay").doubleValue(), duplicated_msg);
     }
+    busy = true;
     scheduleAfter(par("ProcessingDelay"), new_msg);
 }
 
@@ -443,4 +483,81 @@ void Node::sendACK(int Ack_no, int type, const char *gateName)
 void Node::finish()
 {
     fillOutputFile();
+}
+
+void Node::fillOutputFile()
+{
+    openOutputFile();
+    for (auto it : outputBuffer)
+    {
+        outputFile << it;
+    }
+    outputFile.close();
+}
+void Node::Timeout_print(int seqnum)
+{
+
+    std::string line_to_print = "Time out event at time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] for frame with seq_num=[" + std::to_string(seqnum) + "]; \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::readLine_print(std::bitset<4> error)
+{
+    std::string line_to_print = "At time [" + simTime().str() + "], at Node [" + this->getName()[4] + "] Introducing channel error with  code [" + error.to_string() + "]; \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::transmitDataFrame_print(Message_Base *msg)
+{
+    int num = messageIndex - 1;
+    std::bitset<4> error = errors[num];
+    // Correct the delayValue computation
+    double delayValue = (error[0] == 1) ? par("ErrorDelay").doubleValue() : 0;
+    int dupValue = (error[1] == 0) ? 0 : (duplicateFlag == true) ? 1
+                                                                 : 2;
+    int modValue = (error[3] == 0) ? -1 : modifiedBit;
+    // Correct the multi-line string concatenation
+    std::string line_to_print =
+        "at time [" + simTime().str() +
+        "], at Node [" + this->getName()[4] +
+        "]  frame with seq_num = [" + std::to_string(msg->getHeader()) +
+        "] and payload = [" + msg->getPayload() +
+        "] and trailer = [" + msg->getTrailer() +
+        "] Modified [" + std::to_string(modValue) +
+        "], Lost [" + std::to_string(error[2]) +
+        "] Duplicate[" + std::to_string(dupValue) +
+        "], Delay [" + std::to_string(delayValue) + "]  \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::transmitColnlrolFrame_print(Message_Base *msg)
+{
+
+    std::string type = (msg->getType() == MsgType_t::ACK) ? "ACK" : "NACK";
+    std::string lossValue = (ackLossFlag) ? "yes" : "No";
+    ackLossFlag = false;
+    // Correct the multi-line string concatenation
+    std::string line_to_print =
+        "at time [" + simTime().str() +
+        "], at Node [" + this->getName()[4] +
+        "]  Sending [" + type +
+        "] with number = [" + std::to_string(msg->getAck_no()) +
+        "] loss = [" + lossValue + "]  \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
+}
+
+void Node::receivingDataFrame_print(int seqNo, string payload)
+{
+    // Uploading payload=[…..] and seq_num =[…]  to the network layer
+    std::string line_to_print =
+        "at time [" + simTime().str() +
+        "] Uploading payload [" + std::string(payload) +
+        "] and seq_num = [" + std::to_string(seqNo) +
+        "] to the network layer  \n";
+    // std::cout << line_to_print << std::endl;
+    outputBuffer.push_back(line_to_print);
 }
