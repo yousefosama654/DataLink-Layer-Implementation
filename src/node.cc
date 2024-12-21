@@ -151,7 +151,6 @@ void Node::handleMessage(cMessage *msg)
             // Searching for which frame is ACKed
             for (int i = windowStart; i <= messageIndex; i++)
             {
-                // EV << "ACKED " << endl;
                 // the ACKed frame is found
                 if (i % maxSeqNo == Ack_no)
                 {
@@ -178,6 +177,7 @@ void Node::handleMessage(cMessage *msg)
                             int oldWindowStart = windowStart;
                             windowStart = i;
                             windowEnd = windowStart + par("WindowSize").intValue();
+                            EV << " SENDER window start= " << windowStart << " window end =" << windowEnd << " message Turn is " << messageIndex << " Is busy " << busy << endl;
                             for (int j = oldWindowStart; j < windowStart; j++)
                             {
                                 sentMessages[j % maxSeqNo] = false;
@@ -199,8 +199,7 @@ void Node::handleMessage(cMessage *msg)
             // EV << "entering sender NACK\n";
             for (int i = windowStart; i < messageIndex; i++)
             {
-                // EV << "entering sender NACK loop " << i << endl;
-                // EV << "windowStart " << windowStart << " messageIndex " << messageIndex << endl;
+
                 if (i % maxSeqNo == Ack_no)
                 {
                     NACKs[Ack_no] = true;
@@ -285,8 +284,6 @@ void Node::handleMessage(cMessage *msg)
                         EV << " here is i " << i % maxSeqNo << endl;
                         // insert to be printed in order when we send it to Network Layer
 
-                        // EV << "inserting to network layer\n";
-                        // EV << "inserting to network layer" << seqNo << mptr->getPayload() << "\n";
                         deframing(mptr);
                         toNetworkLayer.insert({seqNo, std::string(mptr->getPayload())});
                         recivedMessages[seqNo] = true;
@@ -311,6 +308,7 @@ void Node::handleMessage(cMessage *msg)
     }
     if (isSender)
     {
+        EV << "I am SENDER" << endl;
         sendMessage("out");
     }
 }
@@ -345,14 +343,16 @@ void Node::framing(Message_Base *mptr, int seqNum, string payload, bool modifyFl
 
 void Node::deframing(Message_Base *mptr)
 {
-    string stuffed=mptr->getPayload();
+    string stuffed = mptr->getPayload();
     // Remove the start and end flag
     stuffed = stuffed.substr(1, stuffed.size() - 2);
 
     string unstuffed;
     int stuffedSize = stuffed.size();
-    for (int i = 0; i < stuffedSize; i++) {
-        if (stuffed[i] == '/') {
+    for (int i = 0; i < stuffedSize; i++)
+    {
+        if (stuffed[i] == '/')
+        {
             // Skip the escape character and take the next character as is
             i++;
         }
@@ -360,7 +360,6 @@ void Node::deframing(Message_Base *mptr)
     }
     mptr->setPayload(unstuffed.c_str());
 }
-
 
 string Node::modifyMessage(string payload)
 {
@@ -426,17 +425,20 @@ void Node::sendMessage(const char *gateName)
 {
     if (busy == true)
         return;
-    delayFlag = false;
-    lossFlag = false;
-    duplicateFlag = false;
-    EV << "lossFlag = false (Node::sendMessage)" << endl;
     if (messageIndex >= windowEnd || messageIndex >= messages.size())
     {
         return;
     }
+    EV << "ready to read " << endl;
+    busy = true;
+    delayFlag = false;
+    lossFlag = false;
+    duplicateFlag = false;
+
     if (!messageQueue.empty())
     {
         int seqNum = messageQueue.front().first;
+        EV << "send from messageQueue with seqNO" << seqNum << endl;
         int flag = messageQueue.front().second;
         transmitMessage(seqNum, MsgType_t::Data, flag);
         return;
@@ -446,6 +448,7 @@ void Node::sendMessage(const char *gateName)
     sentMessages[messageIndex % maxSeqNo] = true;
     framing(new_msg, messageIndex % maxSeqNo, messages[messageIndex], error[3]);
     readLine_print(error);
+    EV << "start reading data with seqNO =" << messageIndex % maxSeqNo << endl;
     messageIndex++;
     if ((error & bitset<4>(errorType::Loss)) != bitset<4>(0))
     {
@@ -465,7 +468,7 @@ void Node::sendMessage(const char *gateName)
         Message_Base *duplicated_msg = new Message_Base(*new_msg);
         scheduleAfter(par("DuplicationDelay").doubleValue() + par("ProcessingDelay").doubleValue(), duplicated_msg);
     }
-    busy = true;
+
     scheduleAfter(par("ProcessingDelay"), new_msg);
 }
 
