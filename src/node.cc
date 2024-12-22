@@ -4,7 +4,6 @@ Define_Module(Node);
 
 void Node::initialize()
 {
-    // TODO:Get the parameters and put them in class variables
     windowStart = 0;
     windowEnd = par("WindowSize").intValue();
     messageIndex = 0;
@@ -27,6 +26,7 @@ void Node::initialize()
 void Node::transmitMessage(int seqNum, MsgType_t type, bool delay = false)
 {
     busy = true;
+    EV << "i am busy now transmitMessage with seqNum " << seqNum << endl;
     for (int i = windowStart; i < windowEnd; i++)
     {
         if (i % maxSeqNo == seqNum)
@@ -44,11 +44,8 @@ void Node::handleMessage(cMessage *msg)
 {
     Message_Base *mptr = check_and_cast<Message_Base *>(msg);
     // if the message is self message send the processed msg and start processing new msg
-    // TODO: check the type of each self message and for each type call function sendDelayed()
-    // TODO: in order not to get ACK/NACK before curr message is processing make a flag to check if the message is processing or not and buffer any ACKS or NACKS
     if (msg->isSelfMessage())
     {
-        // TODO: call the timeout self message every time u send a message
         if (mptr->getType() == MsgType_t::timeout)
         {
             Timeout_print(mptr->getHeader());
@@ -57,7 +54,10 @@ void Node::handleMessage(cMessage *msg)
             if (busy == false)
                 transmitMessage(mptr->getHeader(), MsgType_t::Data);
             else
+            {
                 messageQueue.push(std::make_pair(mptr->getHeader(), false));
+                EV << "Self message timeout messageQueue.push\n";
+            }
             return;
         }
         // Reciever send ACK or NACK
@@ -83,6 +83,8 @@ void Node::handleMessage(cMessage *msg)
             lossFlag = false;
             EV << "loss frame (isSelfMessage) is " << mptr->getHeader() << endl;
             busy = false;
+            EV << "i am free now after lossFlag msg with seqNum " << mptr->getHeader() << endl;
+
             sendMessage("out");
             scheduleTimeout(mptr->getHeader());
             return;
@@ -103,10 +105,12 @@ void Node::handleMessage(cMessage *msg)
             // in order nto to read the next line directly
             duplicateFlag = false;
             busy = true;
+            EV << "i am busy now after duplicateFlag1 msg with seqNum " << mptr->getHeader() << endl;
         }
         else
         {
             busy = false;
+            EV << "i am free now after duplicateFlag2 msg with seqNum " << mptr->getHeader() << endl;
             sendMessage("out");
         }
         return;
@@ -168,6 +172,7 @@ void Node::handleMessage(cMessage *msg)
                         else
                         {
                             messageQueue.push(std::make_pair(Ack_no, true));
+                            EV << "recieving ACK messageQueue.push\n";
                         }
                     }
                     else
@@ -204,9 +209,9 @@ void Node::handleMessage(cMessage *msg)
                 {
                     NACKs[Ack_no] = true;
                     EV << "sender NACKS\n";
-                    for (int i = 0; i < 8; i++)
+                    for (int k = 0; k < 8; k++)
                     {
-                        EV << NACKs[i] << " ";
+                        EV << NACKs[k] << " ";
                     }
                     if (busy == false)
                     {
@@ -218,7 +223,8 @@ void Node::handleMessage(cMessage *msg)
                     else
                     {
                         messageQueue.push(std::make_pair(Ack_no, true));
-                        EV << "resending frame " << i << " when it is not busy" << endl;
+                        // EV << "resending frame " << i << " when it is not busy" << endl;
+                        EV << "recieving NACK messageQueue.push\n";
                     }
                 }
             }
@@ -226,7 +232,7 @@ void Node::handleMessage(cMessage *msg)
         // recievind data (Reciever)
         else
         {
-            // TODO: add de-framing
+            EV <<"Before advance" <<"windowStart " << windowStart << " windowend " << windowEnd << endl;
             int seqNo = mptr->getHeader();
             // if data is already recived discared it
             if (recivedMessages[seqNo] == true)
@@ -257,20 +263,21 @@ void Node::handleMessage(cMessage *msg)
                         }
                         // recivedMessages
                         recivedMessages[seqNo] = true;
-                        int i = seqNo;
-                        while (recivedMessages[i] == true)
+                        int j = seqNo;
+                        while (recivedMessages[j % maxSeqNo] == true)
                         {
-                            i++;
+                            j++;
                             windowEnd += 1;
                             windowStart += 1;
+                            EV << "Advance  window\n";
                             recivedMessages[(windowEnd - 1) % maxSeqNo] = false;
                             NACKs[(windowEnd - 1) % maxSeqNo] = false;
                         }
                         EV << "printing recivedMessages \n";
                         EV << "windowStart " << windowStart << " windowEnd " << windowEnd << endl;
-                        for (int i = 0; i < 8; i++)
+                        for (int k = 0; k < 8; k++)
                         {
-                            EV << recivedMessages[i] << " ";
+                            EV << recivedMessages[k] << " ";
                         }
                         int ack_no = (windowStart % maxSeqNo);
                         // EV << "special case ack:: " << ack_no << " windowStart " << windowStart << " windowend " << windowEnd << endl;
@@ -283,7 +290,6 @@ void Node::handleMessage(cMessage *msg)
                         EV << "out of order data " << seqNo << endl;
                         EV << " here is i " << i % maxSeqNo << endl;
                         // insert to be printed in order when we send it to Network Layer
-
                         deframing(mptr);
                         toNetworkLayer.insert({seqNo, std::string(mptr->getPayload())});
                         recivedMessages[seqNo] = true;
@@ -293,9 +299,9 @@ void Node::handleMessage(cMessage *msg)
                             type = MsgType_t::NACK;
                             NACKs[windowStart % maxSeqNo] = true;
                             EV << "windowStart " << windowStart << " windowend " << windowEnd << endl;
-                            for (int i = 0; i < 8; i++)
+                            for (int k = 0; k < 8; k++)
                             {
-                                EV << NACKs[i] << " ";
+                                EV << NACKs[k] << " ";
                             }
                         }
                         int ack_no = ((windowStart) % maxSeqNo);
@@ -328,13 +334,11 @@ string Node::stringStuffing(string payload)
     stuffed += "$";
     return stuffed;
 }
-// TODO: take all message paramters and write it once it framed
 void Node::framing(Message_Base *mptr, int seqNum, string payload, bool modifyFlag)
 {
     string modifiedPayload = modifyMessage(payload);
     string stuffedPayload = stringStuffing(payload);
     string stuffedmodifiedPayload = stringStuffing(modifiedPayload);
-    // TODO: need to check after u finish old code
     mptr->setPayload((modifyFlag) ? stuffedmodifiedPayload.c_str() : stuffedPayload.c_str());
     mptr->setHeader(seqNum);
     mptr->setTrailer(calculateCRC(stuffedPayload));
@@ -346,7 +350,6 @@ void Node::deframing(Message_Base *mptr)
     string stuffed = mptr->getPayload();
     // Remove the start and end flag
     stuffed = stuffed.substr(1, stuffed.size() - 2);
-
     string unstuffed;
     int stuffedSize = stuffed.size();
     for (int i = 0; i < stuffedSize; i++)
@@ -405,6 +408,10 @@ void Node::readInputFile(string &fileName, vector<bitset<4>> *errors, vector<str
         {
             getline(input_file, message);
             errors->push_back(error);
+            if (!message.empty() && message[0] == ' ')
+            {
+                message.erase(0, 1);
+            }
             messages->push_back(message);
         }
         input_file.close();
@@ -423,26 +430,31 @@ void Node::scheduleTimeout(int seqNum)
 }
 void Node::sendMessage(const char *gateName)
 {
+    // i am processing something right now so i can't send any message
     if (busy == true)
         return;
-    if (messageIndex >= windowEnd || messageIndex >= messages.size())
-    {
-        return;
-    }
-    EV << "ready to read " << endl;
-    busy = true;
-    delayFlag = false;
-    lossFlag = false;
-    duplicateFlag = false;
-
     if (!messageQueue.empty())
     {
         int seqNum = messageQueue.front().first;
         EV << "send from messageQueue with seqNO" << seqNum << endl;
         int flag = messageQueue.front().second;
         transmitMessage(seqNum, MsgType_t::Data, flag);
+        messageQueue.pop();
+        EV << "messageQueue.pop\n";
         return;
     }
+    if (messageIndex >= windowEnd || messageIndex >= messages.size())
+    {
+        return;
+    }
+    EV << "ready to read " << endl;
+    busy = true;
+    EV << "i am busy now after sendMessage msg with seqNum " << messageIndex % maxSeqNo << endl;
+    delayFlag = false;
+    lossFlag = false;
+    duplicateFlag = false;
+
+
     Message_Base *new_msg = new Message_Base();
     bitset<4> error = errors[messageIndex];
     sentMessages[messageIndex % maxSeqNo] = true;
@@ -472,7 +484,6 @@ void Node::sendMessage(const char *gateName)
     scheduleAfter(par("ProcessingDelay"), new_msg);
 }
 
-// TODO: implement the CRC function and check if this working
 char Node::calculateCRC(string payload)
 {
     // CRC-8 polynomial: x^2 + x + 1 (0x07)

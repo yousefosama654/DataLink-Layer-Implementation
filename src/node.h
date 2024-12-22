@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <bitset>
+#include <string>
 using namespace omnetpp;
 using namespace std;
 /**
