@@ -76,7 +76,7 @@ protected:
   void sendMessage(const char *gateName);
   void sendACK(int Ack_no, int type, const char *gateName);
   void scheduleTimeout(int seqNum);
-  void transmitMessage(int seqNum, MsgType_t type, bool delay);
+  void transmitMessage(int seqNum, MsgType_t type);
   virtual void finish() override;
 
 public:
