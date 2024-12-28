@@ -6,14 +6,12 @@ This project simulates data link layer protocols for communication between two n
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Input Files](#input-files)
-- [System Outputs](#system-outputs)
-- [Key Algorithms](#key-algorithms)
-- [Getting Started](#getting-started)
-- [Demo](#demo)
-- [Future Enhancements](#future-enhancements)
+- [📖 Overview](#overview)  
+- [✨ Features](#features)  
+- [📂 Input Files](#input-files)  
+- [📝 System Outputs](#system-outputs)  
+- [🧠 Key Algorithms](#key-algorithms)  
+- [🚀 Getting Started](#getting-started) 
 
 ---
 
@@ -79,5 +77,4 @@ The system generates:
 - OMNeT++
 - GCC
 - Java 11
-
 
