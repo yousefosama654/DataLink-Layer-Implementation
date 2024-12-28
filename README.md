@@ -11,11 +11,11 @@ This project simulates data link layer protocols for communication between two n
 - [📂 Input Files](#input-files)  
 - [📝 System Outputs](#system-outputs)  
 - [🧠 Key Algorithms](#key-algorithms)  
-- [🚀 Getting Started](#getting-started) 
+- [🚀 Prerequisites](#Prerequisites) 
 
 ---
 
-## Overview
+## 📖Overview
 
 This project demonstrates a reliable communication simulation over a noisy channel. The simulation handles:
 
@@ -29,7 +29,7 @@ The system consists of:
 
 ---
 
-## Features
+## ✨Features
 
 - **Selective Repeat Protocol**: Implements acknowledgment and retransmission based on sequence numbers.
 - **Noise Simulation**: Simulates errors like modification, loss, duplication, and delay.
@@ -38,7 +38,7 @@ The system consists of:
 
 ---
 
-## Input Files
+## 📂Input Files
 
 1. **Input Files for Nodes** (`input0.txt` and `input1.txt`):
    - Contains messages prefixed with a 4-bit error code (e.g., `1010 Data Link`).
@@ -49,7 +49,7 @@ The system consists of:
 
 ---
 
-## System Outputs
+## 📝System Outputs
 
 The system generates:
 - A log file (`output.txt`) containing details of message transmissions, including errors and acknowledgments.
@@ -57,7 +57,7 @@ The system generates:
 
 ---
 
-## Key Algorithms
+## 🧠Key Algorithms
 
 1. **Selective Repeat Protocol**:
    - Manages retransmissions for errored frames with timeout mechanisms.
@@ -71,9 +71,8 @@ The system generates:
 
 ---
 
-## Getting Started
 
-### Prerequisites
+## 🚀Prerequisites
 - OMNeT++
 - GCC
 - Java 11
